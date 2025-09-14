@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Área do Motorista</title>
+    <style>
+        /* Estilos Base */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 1rem; /* Usar unidades relativas */
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 450px; /* Limite máximo para telas grandes */
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            font-size: clamp(1.5rem, 5vw, 2rem); /* Tamanho de fonte responsivo */
+        }
+
+        /* Estilos do Formulário */
+        .tela {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #form-checkin {
+            width: 100%;
+        }
+
+        #form-checkin input[type="text"] {
+            width: 100%;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+            box-sizing: border-box; /* Garante que o padding não aumente a largura */
+            text-transform: uppercase;
+        }
+
+        #form-checkin input::placeholder {
+            text-transform: none;
+        }
+
+        #form-checkin button {
+            width: 100%;
+            background-color: #3498db;
+            color: white;
+            padding: 1rem;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #form-checkin button:hover {
+            background-color: #2980b9;
+        }
+
+        /* Estilos das Telas de Espera e Chamada */
+        #tela-espera p, #tela-chamada p {
+            font-size: clamp(1rem, 4vw, 1.2rem);
+            text-align: center;
+        }
+        #tela-espera .aviso { color: #7f8c8d; font-style: italic;}
+
+        #tela-chamada { background-color: #2ecc71; color: white; border-radius: 8px; padding: 2rem;}
+        .chamada-box h1 { font-size: clamp(1.8rem, 7vw, 2.5rem); color: white; }
+        #btn-confirmar { background-color: #fff; color: #2ecc71; padding: 1rem 2rem; font-size: 1.1rem; border: none; border-radius: 4px; margin-top: 1rem; }
+        #btn-confirmar:disabled { background-color: #bdc3c7; }
+
+        .spinner {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #3498db;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 2s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Media Query para telas muito pequenas */
+        @media (max-width: 480px) {
+            body {
+                padding: 0.5rem;
+            }
+            .container {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container motorista-container">
+
+        <div id="tela-checkin" class="tela">
+            <h1>Check-in de Veículo</h1>
+            <form id="form-checkin">
+                <input type="text" id="placa" placeholder="Placa do Veículo (AAA1A11)" required maxlength="7" autocomplete="off">
+                <input type="text" id="motorista" placeholder="Seu Nome" required autocomplete="off">
+                <input type="text" id="transportadora" placeholder="Nome da Transportadora" required autocomplete="off">
+                <button type="submit">Entrar na Fila</button>
+            </form>
+        </div>
+
+        <div id="tela-espera" class="tela" style="display: none;">
+            <div class="spinner"></div>
+            <h1>Aguardando Chamada</h1>
+            <p>Olá, <strong id="nome-motorista"></strong>!</p>
+            <p>Seu veículo <strong id="placa-veiculo"></strong> está na fila.</p>
+            <p class="aviso">Mantenha esta tela aberta para receber a notificação.</p>
+        </div>
+
+        <div id="tela-chamada" class="tela" style="display: none;">
+            <div class="chamada-box">
+                <h1>SUA VEZ DE CARREGAR!</h1>
+                <p id="instrucao-doca">Dirija-se à Doca X</p>
+                <button id="btn-confirmar">Confirmar Recebimento</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        const telaCheckin = document.getElementById('tela-checkin');
+        const telaEspera = document.getElementById('tela-espera');
+        const telaChamada = document.getElementById('tela-chamada');
+        const formCheckin = document.getElementById('form-checkin');
+        let minhaPlaca = '';
+
+        const notificationSound = new Audio('https://cdn.pixabay.com/download/audio/2021/08/04/audio_12b0c7443c.mp3?filename=emergency-alarm-with-reverb-29431.mp3');
+        notificationSound.loop = true;
+
+        formCheckin.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const placaInput = document.getElementById('placa');
+            const motoristaInput = document.getElementById('motorista');
+            const transportadoraInput = document.getElementById('transportadora');
+            
+            minhaPlaca = placaInput.value.toUpperCase();
+            
+            const data = {
+                placa: minhaPlaca,
+                motorista: motoristaInput.value.toUpperCase(),
+                transportadora: transportadoraInput.value.toUpperCase()
+            };
+
+            socket.emit('motorista:checkin', data);
+            
+            document.getElementById('nome-motorista').innerText = data.motorista;
+            document.getElementById('placa-veiculo').innerText = data.placa;
+            
+            telaCheckin.style.display = 'none';
+            telaEspera.style.display = 'flex';
+        });
+
+        socket.on('veiculo:chamado', (data) => {
+            if (data.placa === minhaPlaca) {
+                document.getElementById('instrucao-doca').innerText = `Dirija-se à ${data.doca}`;
+                telaEspera.style.display = 'none';
+                telaChamada.style.display = 'flex';
+                
+                notificationSound.play().catch(error => {
+                    console.error("Erro ao tocar áudio:", error);
+                    alert("O navegador bloqueou o som. Por favor, interaja com a página para ativá-lo.");
+                });
+            }
+        });
+        
+        document.getElementById('btn-confirmar').addEventListener('click', () => {
+           notificationSound.pause();
+           notificationSound.currentTime = 0;
+
+           socket.emit('motorista:confirmar', minhaPlaca);
+           document.getElementById('btn-confirmar').disabled = true;
+           document.getElementById('btn-confirmar').innerText = 'Confirmado!';
+        });
+    </script>
+</body>
+</html>

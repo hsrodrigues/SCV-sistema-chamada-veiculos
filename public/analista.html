@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel do Analista</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Painel de Controle de Pátio</h1>
+        <table id="tabela-veiculos">
+            <thead>
+                <tr>
+                    <th>Placa</th>
+                    <th>Motorista</th>
+                    <th>Transportadora</th>
+                    <th>Chegada</th>
+                    <th>Tempo de Espera</th>
+                    <th>Status</th>
+                    <th>Ação</th>
+                </tr>
+            </thead>
+            <tbody id="corpo-tabela">
+                <!-- Linhas serão inseridas via JavaScript -->
+            </tbody>
+        </table>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+
+    <script>
+        const socket = io();
+        const corpoTabela = document.getElementById('corpo-tabela');
+        let intervalId;
+        let currentVehicles = [];
+
+        socket.on('lista:atualizada', (veiculos) => {
+            currentVehicles = veiculos;
+            if (intervalId) clearInterval(intervalId);
+            renderizarTabela();
+            intervalId = setInterval(renderizarTabela, 1000); 
+        });
+
+        function renderizarTabela() {
+            const veiculos = currentVehicles;
+            corpoTabela.innerHTML = '';
+            veiculos.sort((a, b) => new Date(a.chegada) - new Date(b.chegada));
+
+            veiculos.forEach(v => {
+                const tr = document.createElement('tr');
+                tr.className = `status-${v.status.toLowerCase().replace(/ /g, '-')}`;
+                
+                let tempoEsperaTexto = '';
+                
+                // --- MUDANÇA APLICADA AQUI ---
+                // A condição agora verifica se o status NÃO é mais 'Aguardando' E se a hora da chamada existe.
+                // Isso garante que o tempo fique congelado para todos os status posteriores.
+                if (v.status !== 'Aguardando' && v.horario_chamada) {
+                    const tempoMs = new Date(v.horario_chamada) - new Date(v.chegada);
+                    const minutos = Math.floor(tempoMs / 60000);
+                    tempoEsperaTexto = `<span class="tempo-finalizado">${minutos} min (Final)</span>`;
+                } else {
+                    const tempoMs = Math.max(0, new Date() - new Date(v.chegada));
+                    const minutos = Math.floor(tempoMs / 60000);
+                    const segundos = Math.floor((tempoMs % 60000) / 1000).toString().padStart(2, '0');
+                    tempoEsperaTexto = `${minutos}:${segundos} min`;
+                }
+
+                let botaoAcao = '';
+                if (v.status === 'Aguardando') {
+                    botaoAcao = `<button class="btn-chamar" onclick="chamarVeiculo('${v.placa}')">Chamar</button>`;
+                } else if (v.status !== 'Finalizado') {
+                     botaoAcao = `<button class="btn-finalizar" onclick="finalizarProcesso('${v.placa}')">Finalizar</button>`;
+                }
+
+                tr.innerHTML = `
+                    <td>${v.placa}</td>
+                    <td>${v.motorista}</td>
+                    <td>${v.transportadora}</td>
+                    <td>${new Date(v.chegada).toLocaleTimeString('pt-BR')}</td>
+                    <td>${tempoEsperaTexto}</td>
+                    <td><span class="status">${v.status}</span></td>
+                    <td>${botaoAcao}</td>
+                `;
+                corpoTabela.appendChild(tr);
+            });
+        }
+        
+        function chamarVeiculo(placa) {
+            const doca = prompt("Para qual linha o veículo deve se dirigir?", "Linha 01");
+            if (doca) {
+                socket.emit('analista:chamar', { placa, doca });
+            }
+        }
+        
+        function finalizarProcesso(placa) {
+            if (confirm(`Tem certeza que deseja finalizar o processo para o veículo ${placa}?`)) {
+                socket.emit('analista:finalizar', placa);
+            }
+        }
+    </script>
+</body>
+</html>
