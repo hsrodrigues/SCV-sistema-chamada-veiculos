@@ -72,21 +72,22 @@ Este projeto substitui o processo manual e suscetível a erros de chamadas telef
 
 ## 📂 Estrutura do Projeto
 
+```bash
 /chamada-veiculos/
 ├── /db/
-│ ├── connection.js
-│ └── queries.js
+│   ├── connection.js
+│   └── queries.js
 ├── /public/
-│ ├── analista.html
-│ ├── motorista.html
-│ └── style.css
+│   ├── analista.html
+│   ├── motorista.html
+│   └── style.css
 ├── .env
 ├── .gitignore
 ├── package.json
 ├── schema.sql
 ├── server.js
 └── README.md
-
+```
 
 ---
 
@@ -97,6 +98,7 @@ Este projeto substitui o processo manual e suscetível a erros de chamadas telef
 ```bash
 git clone https://github.com/SEU-UTILIZADOR/SEU-REPOSITORIO.git
 cd SEU-REPOSITORIO
+```
 
 2. Configure o Banco de Dados
 
